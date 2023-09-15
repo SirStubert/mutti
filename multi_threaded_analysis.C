@@ -27,6 +27,7 @@ TTree* createTree() {
 }
 
 void fillTree(TTree* tree, long long nEntries) {
+	std::cout << "Filling tree with " << nEntries << " entries.\n";
 	for (long long i = 0; i < nEntries; i++) {
 		eventData.setValue(gRandom->Gaus(5., 1.));
 		tree->Fill();
@@ -34,10 +35,9 @@ void fillTree(TTree* tree, long long nEntries) {
 }
 
 void printThreadStatus(int threadID, TString& string) {
-	while (!(printMutex.try_lock())) {
-		std::cout << "thread " << threadID << ": " << string << "\n";
-		printMutex.unlock();
-	}
+	while (!(printMutex.try_lock()));
+	std::cout << "thread " << threadID << ": " << string << "\n";
+	printMutex.unlock();
 }
 
 void setNewTask(TTree* tree, long long taskID, Leafs& task) {
@@ -47,20 +47,18 @@ void setNewTask(TTree* tree, long long taskID, Leafs& task) {
 
 bool getTask(TTree* tree, Leafs& task, long long nTasks) {
 	bool isNewTask = false;
-	while (!(analysisMutex.try_lock())) {
-		isNewTask = taskID < nTasks ? true : false;
-		if (isNewTask)
-			setNewTask(tree, taskID++, task);
-		analysisMutex.unlock();
-	}
+	while (!(analysisMutex.try_lock()));
+	isNewTask = taskID < nTasks ? true : false;
+	if (isNewTask)
+		setNewTask(tree, taskID++, task);
+	analysisMutex.unlock();
 	return isNewTask;
 }
 
 void mergeResults(Results& newResults) {
-	while (!(mergeMutex.try_lock())) {
-		resultData.mergeResults(newResults);
-                mergeMutex.unlock();
-        }
+	while (!(mergeMutex.try_lock()));
+	resultData.mergeResults(newResults);
+    mergeMutex.unlock();
 }
 
 void threadStarter(int threadID, TTree* tree, long long nTasks) {
@@ -69,7 +67,6 @@ void threadStarter(int threadID, TTree* tree, long long nTasks) {
 	TString name = "thread_" + TString::Itoa(threadID, 10);
 	Analysis dataAnalyzer(name);
 	Leafs task;
-	long long taskID = 0;
 	while (getTask(tree, task, nTasks))
 		dataAnalyzer.processTask(task);
 	mergeResults(dataAnalyzer.getResults());
@@ -93,6 +90,7 @@ void closeThreads(std::vector<std::thread>& threads) {
 }
 
 void multiThreadedAnalysis(TTree* tree) {
+	long long taskID = 0;
 	std::vector<std::thread> threads;
 	initializeThreads(threads, 4, tree);
 	closeThreads(threads);
